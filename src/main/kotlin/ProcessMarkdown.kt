@@ -1,7 +1,4 @@
-import com.vladsch.flexmark.ast.FencedCodeBlock
-import com.vladsch.flexmark.ast.Node
-import com.vladsch.flexmark.ast.SoftLineBreak
-import com.vladsch.flexmark.ast.Text
+import com.vladsch.flexmark.ast.*
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension
 import com.vladsch.flexmark.ext.tables.TablesExtension
 import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterBlock
@@ -12,14 +9,12 @@ import com.vladsch.flexmark.util.options.MutableDataSet
 import java.io.File
 import java.util.regex.Pattern
 
-fun Any?.println() = println(this)
-
 // markdown 文件目录
-const val DOC_PATH = """D:\docs"""
+const val DOC_PATH = """D:\IdeaProjects\kotlin-web-site-cn/pages/docs"""
 
 const val HTML_COMMENT_START = "<!--"
 const val HTML_COMMENT_END = "-->"
-val options = MutableDataSet().set(Parser.EXTENSIONS, listOf(TablesExtension.create(), StrikethroughExtension.create(),YamlFrontMatterExtension.create()))
+val options = MutableDataSet().set(Parser.EXTENSIONS, listOf(TablesExtension.create(), StrikethroughExtension.create(), YamlFrontMatterExtension.create()))
 val PARSER: Parser = Parser.builder(options).build()
 val FORMATTER: Formatter = Formatter.builder(options).build()
 
@@ -33,7 +28,9 @@ fun File.addHtmlCommentTagBetweenNewLine(node: Node) {
         node is SoftLineBreak -> {
             val previousNode = node.previous
             val nextNode = node.next
-            if (previousNode !is Text || nextNode !is Text || !needJoin(previousNode, nextNode)) return
+            if (previousNode !is Text && previousNode !is Link) return
+            if (nextNode !is Text && nextNode !is Link)  return
+            if (!needJoin(previousNode, nextNode)) return
 
             // 插入 HTML 注释标记
             // 正则：第一行内容 + “换行” + 第二行内容
@@ -44,10 +41,24 @@ fun File.addHtmlCommentTagBetweenNewLine(node: Node) {
     }
 }
 
-fun needJoin(previousNode: Text, nextNode: Text): Boolean {
-    return previousNode.chars.lastChar().isHanzi() && nextNode.chars.firstChar().isHanzi()
+fun Node.lastChar() = when (this) {
+    is Text -> chars.lastChar()
+    is Link -> firstChild.chars.lastChar()
+    else -> ' '
 }
 
+fun Node.firstChar() = when (this) {
+    is Text -> chars.firstChar()
+    is Link -> firstChild.chars.firstChar()
+    else -> ' '
+}
+
+// 判断转换为 HTML 后是否需要删掉两行文本间的空格
+fun needJoin(previousNode: Node, nextNode: Node): Boolean {
+    return previousNode.lastChar().isHanzi() && nextNode.firstChar().isHanzi()
+}
+
+// 判断汉字，排出全角空格、中文标点等
 fun Char.isHanzi() = Character.isIdeographic(toInt()) && Character.isAlphabetic(toInt())
 
 // 查看前 50 行是否包含中文字来辨别是否已经翻译
