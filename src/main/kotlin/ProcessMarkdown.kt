@@ -28,8 +28,7 @@ fun File.addHtmlCommentTagBetweenNewLine(node: Node) {
         node is SoftLineBreak -> {
             val previousNode = node.previous
             val nextNode = node.next
-            if (previousNode !is Text && previousNode !is Link) return
-            if (nextNode !is Text && nextNode !is Link)  return
+
             if (!needJoin(previousNode, nextNode)) return
 
             // 插入 HTML 注释标记
@@ -44,12 +43,16 @@ fun File.addHtmlCommentTagBetweenNewLine(node: Node) {
 fun Node.lastChar() = when (this) {
     is Text -> chars.lastChar()
     is Link -> firstChild.chars.lastChar()
+    is Emphasis -> text.lastChar()
+    is StrongEmphasis -> text.lastChar()
     else -> ' '
 }
 
 fun Node.firstChar() = when (this) {
     is Text -> chars.firstChar()
     is Link -> firstChild.chars.firstChar()
+    is Emphasis -> text.firstChar()
+    is StrongEmphasis -> text.firstChar()
     else -> ' '
 }
 
