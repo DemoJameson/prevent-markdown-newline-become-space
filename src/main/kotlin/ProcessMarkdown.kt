@@ -29,60 +29,37 @@ fun main(args: Array<String>) {
 
 // 换行不分段的文本之间添加 HTML 注释标记，用于防止生成 HTML 时出现空格
 fun File.addHtmlCommentTagBetweenNewLine(node: Node) {
-    if (node is SoftLineBreak) {
-        val previousNode = node.previous
-        val nextNode = node.next
-        if (previousNode is Text && nextNode is Text &&
-                !englishEndThenStart(previousNode, nextNode) &&
-                !englishAndChinese(previousNode, nextNode) &&
-                !alreadyProcessed(previousNode, nextNode)) {
+    when {
+        node is SoftLineBreak -> {
+            val previousNode = node.previous
+            val nextNode = node.next
+            if (previousNode !is Text || nextNode !is Text || !needJoin(previousNode, nextNode)) return
 
-            // 查找插入 HTML 注释标记
-            // 正则：第一行内容 + “换行” / “空白” / “>” 等可能出现的字符 + 第二行内容
-            val regexString = "(" + Pattern.quote(previousNode.chars.toString()) + ")\\s*(\\r?\\n)[\\s>]*(" + Pattern.quote(nextNode.chars.toString()) + ")"
-            writeText(regexString.toPattern().matcher(readText()).replaceFirst("$1$HTML_COMMENT_START$2$HTML_COMMENT_END$3"))
-
-            // 用 formatter 的方式输出 markdown，在这里因为行数会发生变化所以不采用
-            /*previousNode.chars = previousNode.chars.append(HTML_COMMENT_START)
-            nextNode.chars = CharSubSequence.of(HTML_COMMENT_END).append(nextNode.chars)*/
+            // 插入 HTML 注释标记
+            // 正则：第一行内容 + “换行” + 第二行内容
+            val regexString = "(" + Pattern.quote(previousNode.chars.toString()) + ")\\r?\\n(" + Pattern.quote(nextNode.chars.toString()) + ")"
+            writeText(regexString.toPattern().matcher(readText()).replaceFirst("$1$HTML_COMMENT_START\n$HTML_COMMENT_END$2"))
         }
-    } else if (node.hasChildren()) {
-        node.children.filterNot { it is FencedCodeBlock || it is YamlFrontMatterBlock }.forEach(this::addHtmlCommentTagBetweenNewLine)
+        node.hasChildren() -> node.children.filterNot { it is FencedCodeBlock || it is YamlFrontMatterBlock }.forEach(this::addHtmlCommentTagBetweenNewLine)
     }
 }
 
-fun alreadyProcessed(previousNode: Text, nextNode: Text): Boolean {
-    return previousNode.chars.endsWith(HTML_COMMENT_START) && nextNode.chars.startsWith(HTML_COMMENT_END)
+fun needJoin(previousNode: Text, nextNode: Text): Boolean {
+    return previousNode.chars.lastChar().isHanzi() && nextNode.chars.firstChar().isHanzi()
 }
 
-// 行末与行头都是英文字符或标点符号（不处理）
-fun englishEndThenStart(previousNode: Text, nextNode: Text): Boolean {
-    return previousNode.chars.lastChar().containEnglish() &&
-            nextNode.chars.firstChar().containEnglish()
-}
+fun Char.isHanzi() = Character.isIdeographic(toInt()) && Character.isAlphabetic(toInt())
 
-// 行头与行尾是中文和英文（不处理）
-fun englishAndChinese(previousNode: Text, nextNode: Text): Boolean {
-    return previousNode.chars.lastChar().containEnglish() && nextNode.chars.firstChar().containChinese() ||
-            previousNode.chars.lastChar().containChinese() && nextNode.chars.firstChar().containEnglish()
-}
-
-fun Char.containEnglish() = toString().contains("[A-Za-z,.?!\"']".toRegex())
-fun Char.containChinese() = toString().contains("\\p{sc=Han}".toRegex())
-
-// 查看前 20 行是否包含中文字来辨别是否已经翻译
-fun File.hasTranslated() = "\\p{sc=Han}".toPattern().matcher(bufferedReader().lineSequence().take(50).joinToString("")).find()
+// 查看前 50 行是否包含中文字来辨别是否已经翻译
+fun File.hasTranslated() = bufferedReader().lineSequence().take(50).joinToString("").chars().anyMatch(Character::isIdeographic)
 
 // 遍历所有已翻译的 markdown 文件
 fun File.processAllMarkdownFile() {
     if (isFile && name.endsWith(".md") && hasTranslated()) {
-        println("\n" + absolutePath)
+        println(absolutePath)
         val document = PARSER.parse(readText())
 
         addHtmlCommentTagBetweenNewLine(document)
-
-        // 用 formatter 格式化后的行数有变化，不适合
-        /*writeText(FORMATTER.render(document))*/
     } else {
         this.listFiles()?.forEach { it.processAllMarkdownFile() }
     }
