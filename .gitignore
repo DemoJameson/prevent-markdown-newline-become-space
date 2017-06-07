@@ -21,3 +21,4 @@ gradle-app.setting
 # User-specific stuff:
 .idea
 
+/*.iml
